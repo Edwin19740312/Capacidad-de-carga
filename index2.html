@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ing. Edwin Alarcón - Calculadora de Capacidad de Carga</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #0056b3;
+            text-align: center;
+        }
+        .profile-info {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+        .profile-info img {
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            margin-bottom: 15px;
+            border: 3px solid #007bff;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .input-group input[type="number"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+        }
+        .results p {
+            margin: 5px 0;
+        }
+        .error-message {
+            color: red;
+            font-weight: bold;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="profile-info">
+            <h1>Ing. Edwin Alarcón</h1>
+            <p>Especialista en Mecánica de Suelos y Cimentaciones</p>
+        </div>
+
+        <h2>Calculadora de Capacidad de Carga (Terzaghi)</h2>
+
+        <div class="input-group">
+            <label for="B">Ancho de la cimentación (B en metros):</label>
+            <input type="number" id="B" value="2.0" step="0.1">
+        </div>
+        <div class="input-group">
+            <label for="Df">Profundidad de la cimentación (Df en metros):</label>
+            <input type="number" id="Df" value="1.5" step="0.1">
+        </div>
+        <div class="input-group">
+            <label for="phi_prima">Ángulo de fricción interna (phi' en grados, 0-50):</label>
+            <input type="number" id="phi_prima" value="25.0" step="0.1">
+        </div>
+        <div class="input-group">
+            <label for="c_prima">Cohesión (c' en kN/m²):</label>
+            <input type="number" id="c_prima" value="20.0" step="0.1">
+        </div>
+        <div class="input-group">
+            <label for="gamma">Peso unitario del suelo (gamma en kN/m³):</label>
+            <input type="number" id="gamma" value="16.5" step="0.1">
+        </div>
+        <div class="input-group">
+            <label for="FS">Factor de seguridad (FS):</label>
+            <input type="number" id="FS" value="3.0" step="0.1">
+        </div>
+
+        <button onclick="ejecutarCalculo()">Calcular Capacidad de Carga</button>
+
+        <div id="results" class="results" style="display: none;">
+            <h3>Resultados:</h3>
+            <p><strong>Factores de Terzaghi:</strong></p>
+            <p>Nc: <span id="Nc_val"></span></p>
+            <p>Nq: <span id="Nq_val"></span></p>
+            <p>N_gamma: <span id="N_gamma_val"></span></p>
+            <p><strong>Cálculos:</strong></p>
+            <p>Carga bruta última (q_u): <span id="q_u_val"></span> kN/m²</p>
+            <p>Carga admisible por unidad de área (q_adm): <span id="q_adm_val"></span> kN/m²</p>
+            <p>Carga admisible total (Q): <span id="Q_val"></span> kN</p>
+        </div>
+        <div id="error-message" class="error-message" style="display: none;"></div>
+    </div>
+
+    <script>
+        // --- Lógica de cálculo reescrita en JavaScript ---
+
+        // Función para realizar la interpolación lineal
+        function interpolarValores(phiDeseado, phi1, val1, phi2, val2) {
+            if (phi2 === phi1) {
+                return val1;
+            }
+            return val1 + (val2 - val1) * ((phiDeseado - phi1) / (phi2 - phi1));
+        }
+
+        // Tabla de Factores de Capacidad de Carga de Terzaghi (en JS, basada en Tabla 16.1)
+        const TABLA_TERZAGHI = {
+            0: [5.70, 1.00, 0.00], 1: [6.00, 1.10, 0.01], 2: [6.30, 1.22, 0.04],
+            3: [6.62, 1.35, 0.06], 4: [6.97, 1.49, 0.10], 5: [7.34, 1.64, 0.14],
+            6: [7.73, 1.81, 0.20], 7: [8.15, 2.00, 0.27], 8: [8.60, 2.21, 0.35],
+            9: [9.09, 2.44, 0.44], 10: [9.61, 2.69, 0.56], 11: [10.16, 2.98, 0.69],
+            12: [10.76, 3.29, 0.85], 13: [11.41, 3.63, 1.04], 14: [12.11, 4.02, 1.26],
+            15: [12.86, 4.45, 1.52], 16: [13.68, 4.92, 1.82], 17: [14.60, 5.45, 2.18],
+            18: [15.12, 6.04, 2.59], 19: [16.56, 6.70, 3.07], 20: [17.69, 7.44, 3.64],
+            21: [18.92, 8.26, 4.31], 22: [20.27, 9.19, 5.09], 23: [21.75, 10.23, 6.00],
+            24: [23.36, 11.40, 7.08], 25: [25.13, 12.72, 8.34],
+            26: [27.09, 14.21, 9.84], 27: [29.24, 15.90, 11.60], 28: [31.61, 17.81, 13.70],
+            29: [34.24, 19.98, 16.18], 30: [37.16, 22.46, 19.13], 31: [40.41, 25.28, 22.65],
+            32: [44.04, 28.52, 26.87], 33: [48.09, 32.23, 31.94], 34: [52.64, 36.50, 38.04],
+            35: [57.75, 41.44, 45.41], 36: [63.53, 47.16, 54.36], 37: [70.01, 53.80, 65.27],
+            38: [77.50, 61.55, 78.61], 39: [85.97, 70.61, 95.03], 40: [95.66, 81.27, 115.31],
+            41: [106.81, 93.85, 140.51], 42: [119.67, 108.75, 171.99], 43: [134.58, 126.50, 211.56],
+            44: [151.95, 147.74, 261.60], 45: [172.28, 173.28, 325.34], 46: [196.22, 204.19, 407.11],
+            47: [224.55, 241.80, 512.84], 48: [258.28, 287.85, 650.67], 49: [298.71, 344.63, 831.99],
+            50: [347.50, 415.14, 1072.80]
+        };
+
+        function obtenerFactoresTerzaghiJS(phi_grados) {
+            if (phi_grados < 0 || phi_grados > 50) {
+                return { Nc: null, Nq: null, N_gamma: null, error: "El ángulo de fricción φ' está fuera del rango de la tabla (0-50°)." };
+            }
+
+            // Si el ángulo es un entero y está en la tabla, devolver los valores directos
+            if (phi_grados === parseInt(phi_grados) && TABLA_TERZAGHI[phi_grados]) {
+                const [Nc, Nq, N_gamma] = TABLA_TERZAGHI[phi_grados];
+                return { Nc, Nq, N_gamma, error: null };
+            } else {
+                // Realizar interpolación lineal
+                const phi_inferior = Math.floor(phi_grados);
+                const phi_superior = Math.ceil(phi_grados);
+
+                const val_inf = TABLA_TERZAGHI[phi_inferior];
+                const val_sup = TABLA_TERZAGHI[phi_superior];
+
+                if (!val_inf || !val_sup) {
+                    return { Nc: null, Nq: null, N_gamma: null, error: "Error: No se encontraron los puntos para interpolar en la tabla." };
+                }
+
+                const Nc_interpolado = interpolarValores(phi_grados, phi_inferior, val_inf[0], phi_superior, val_sup[0]);
+                const Nq_interpolado = interpolarValores(phi_grados, phi_inferior, val_inf[1], phi_superior, val_sup[1]);
+                const N_gamma_interpolado = interpolarValores(phi_grados, phi_inferior, val_inf[2], phi_superior, val_sup[2]);
+
+                return { Nc: Nc_interpolado, Nq: Nq_interpolado, N_gamma: N_gamma_interpolado, error: null };
+            }
+        }
+
+        // Función que calcula la capacidad de carga (basada en la ecuación 16.4 y los factores de la Tabla 16.1)
+        function calcularCapacidadCargaJS(B, Df, phi_prima, c_prima, gamma, FS) {
+            const { Nc, Nq, N_gamma, error } = obtenerFactoresTerzaghiJS(phi_prima);
+
+            if (error) {
+                return { error: error };
+            }
+
+            const q = gamma * Df;
+            // Ecuación (16.4) para cimentación cuadrada: qu = 1.3*c'*Nc + q*Nq + 0.4*gamma*B*N_gamma
+            const q_u = 1.3 * c_prima * Nc + q * Nq + 0.4 * gamma * B * N_gamma;
+            const q_adm = q_u / FS;
+            const Q = q_adm * (B * B);
+
+            return {
+                Nc: Nc.toFixed(2), // Formatear a 2 decimales
+                Nq: Nq.toFixed(2),
+                N_gamma: N_gamma.toFixed(2),
+                q_u: q_u.toFixed(2),
+                q_adm: q_adm.toFixed(2),
+                Q: Math.round(Q) // Redondear Q a entero
+            };
+        }
+
+
+        // --- Lógica para el evento del botón (interactúa con el HTML) ---
+        function ejecutarCalculo() {
+            const B = parseFloat(document.getElementById('B').value);
+            const Df = parseFloat(document.getElementById('Df').value);
+            const phi_prima = parseFloat(document.getElementById('phi_prima').value);
+            const c_prima = parseFloat(document.getElementById('c_prima').value);
+            const gamma = parseFloat(document.getElementById('gamma').value);
+            const FS = parseFloat(document.getElementById('FS').value);
+
+            const resultsDiv = document.getElementById('results');
+            const errorDiv = document.getElementById('error-message');
+            resultsDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = ''; // Limpiar mensaje de error previo
+
+            // Validar que todas las entradas sean números
+            if (isNaN(B) || isNaN(Df) || isNaN(phi_prima) || isNaN(c_prima) || isNaN(gamma) || isNaN(FS)) {
+                errorDiv.textContent = 'Por favor, ingrese valores numéricos válidos en todos los campos.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (B <= 0 || Df <= 0 || gamma <= 0 || FS <= 0) {
+                 errorDiv.textContent = 'Las dimensiones, peso unitario y factor de seguridad deben ser mayores que cero.';
+                 errorDiv.style.display = 'block';
+                 return;
+            }
+
+
+            const resultados = calcularCapacidadCargaJS(B, Df, phi_prima, c_prima, gamma, FS);
+
+            if (resultados.error) {
+                errorDiv.textContent = resultados.error;
+                errorDiv.style.display = 'block';
+            } else {
+                // Mostrar resultados
+                document.getElementById('Nc_val').textContent = resultados.Nc;
+                document.getElementById('Nq_val').textContent = resultados.Nq;
+                document.getElementById('N_gamma_val').textContent = resultados.N_gamma;
+                document.getElementById('q_u_val').textContent = resultados.q_u;
+                document.getElementById('q_adm_val').textContent = resultados.q_adm;
+                document.getElementById('Q_val').textContent = resultados.Q;
+                resultsDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
